@@ -82,11 +82,12 @@ class IntegrationTests(unittest.TestCase):
         proxy=dest/'etc/v2ray/config.json';proxy.parent.mkdir(parents=True);proxy.write_text('sentinel-proxy')
         state=dest/'var/lib/v2ray-traffic-dashboard';state.mkdir(parents=True)
         database=state/'traffic.sqlite3';database.write_bytes(b'sentinel-database')
-        cmd=[sys.executable,str(ROOT/'scripts/install.py'),'--destdir',str(dest)]
+        cmd=[sys.executable,str(ROOT/'scripts/install.py'),'--destdir',str(dest),'--web-group','nogroup']
         first=subprocess.run(cmd,capture_output=True,text=True);self.assertEqual(first.returncode,0,first.stderr)
         unit=(dest/'etc/systemd/system/v2ray-traffic-dashboard.service').read_text()
         self.assertIn('ProtectSystem=strict',unit)
         nginx=(dest/'etc/v2ray-traffic-dashboard/nginx.conf').read_text()
+        self.assertIn('user nobody nogroup;',nginx)
         self.assertIn('listen 127.0.0.1:8080',nginx);self.assertIn('auth_basic_user_file',nginx)
         self.assertNotEqual(subprocess.run(cmd,capture_output=True).returncode,0)
         uninstall=subprocess.run([sys.executable,str(ROOT/'scripts/uninstall.py'),'--destdir',str(dest)],capture_output=True,text=True)

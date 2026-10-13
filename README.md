@@ -65,7 +65,7 @@ python3 scripts/install.py --destdir /tmp/vtd-install-preview
 sudo python3 scripts/install.py --apply --nginx-binary /usr/sbin/nginx --web-user nobody
 ```
 
-`--nginx-binary` 必须填写本机实际路径，`--web-user` 必须是本机存在的低权限账户。可使用 `www-data` 或 `nginx`。程序拒绝覆盖已有应用目录、配置目录、网页目录、日志目录或同名 unit；路径必须互不包含。保留已有统计数据目录，不替换数据库。
+`--nginx-binary` 必须填写本机实际路径，`--web-user` 必须是本机存在的低权限账户。可使用 `www-data` 或 `nginx`。正式安装自动使用该用户的实际主组（例如 Ubuntu 的 `nobody:nogroup`），也可通过 `--web-group` 指定；跨系统离线暂存时应显式填写目标系统组名。程序拒绝覆盖已有应用目录、配置目录、网页目录、日志目录或同名 unit；路径必须互不包含。保留已有统计数据目录，不替换数据库。
 
 默认位置：
 

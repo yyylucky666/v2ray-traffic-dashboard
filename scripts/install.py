@@ -24,6 +24,9 @@ def build(args):
         safe_path(getattr(args, key))
     if not re.fullmatch(r'[a-z_][a-z0-9_-]*', args.web_user):
         raise ValueError('Invalid web user')
+    if args.web_group and not re.fullmatch(r'[a-z_][a-z0-9_-]*',args.web_group):
+        raise ValueError('Invalid web group')
+    web_group=args.web_group or args.web_user
     if not 1024 <= args.port <= 65535:
         raise ValueError('Loopback web port must be 1024..65535')
     paths=[Path(getattr(args,k)) for k in ('prefix','state_dir','web_dir','config_dir','log_dir')]
@@ -41,8 +44,11 @@ def build(args):
         if sys.platform != 'linux' or os.geteuid() != 0:
             raise ValueError('--apply requires root on Linux')
         import pwd
+        import grp
         account = pwd.getpwnam(args.web_user)
         gid,uid = account.pw_gid,account.pw_uid
+        if args.web_group:gid=grp.getgrnam(args.web_group).gr_gid
+        web_group=grp.getgrgid(gid).gr_name
     dest = Path(args.destdir).resolve() if args.destdir else Path('/')
     def target(path):
         p = dest / path.lstrip('/')
@@ -122,7 +128,7 @@ AccuracySec=5s
 [Install]
 WantedBy=timers.target
 ''')
-    write(args.config_dir+'/nginx.conf',f'''user {args.web_user};
+    write(args.config_dir+'/nginx.conf',f'''user {args.web_user} {web_group};
 worker_processes 1;
 pid /run/{NAME}-web.pid;
 error_log {args.log_dir}/error.log warn;
@@ -212,6 +218,7 @@ def main():
                        ('config-dir','/etc/'+NAME),('unit-dir','/etc/systemd/system'),('log-dir','/var/log/'+NAME),
                        ('nginx-binary','/usr/sbin/nginx'),('web-user','nobody')]:parser.add_argument('--'+name,default=value)
     parser.add_argument('--port',type=int,default=8080)
+    parser.add_argument('--web-group',help='Worker group; default is the user primary group on Linux, or web-user for offline staging')
     args=parser.parse_args()
     try:build(args)
     except Exception as exc:parser.exit(1,'Installation failed: '+str(exc)+'\n')
