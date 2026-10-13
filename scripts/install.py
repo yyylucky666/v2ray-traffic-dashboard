@@ -82,6 +82,8 @@ def build(args):
     shutil.copy2(SOURCE/'bin'/NAME,target(args.prefix+'/bin/'+NAME));target(args.prefix+'/bin/'+NAME).chmod(0o755)
     for notice in ('LICENSE','THIRD_PARTY_NOTICES.md'):
         shutil.copy2(SOURCE/notice,target(args.prefix+'/'+notice))
+    temporary=target(args.log_dir+'/tmp');temporary.mkdir();temporary.chmod(0o750)
+    if not args.destdir:os.chown(temporary,0,gid)
     for name in ('client_body','proxy','fastcgi','uwsgi','scgi'):
         p=target(args.log_dir+'/tmp/'+name);p.mkdir(parents=True,exist_ok=True);p.chmod(0o750)
         if not args.destdir:os.chown(p,uid,gid)

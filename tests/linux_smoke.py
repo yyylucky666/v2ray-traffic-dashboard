@@ -34,7 +34,16 @@ def main():
         auth=Path('/etc/v2ray-traffic-dashboard/htpasswd');auth.chmod(0o640);os.chown(auth,0,Path('/etc/v2ray-traffic-dashboard').stat().st_gid)
         sys.argv=['v2ray-traffic-dashboard','export'];assert cli()==0
         # Units are only the dashboard's own units; no V2Ray service exists on this runner.
-        run('systemctl','enable','--now','v2ray-traffic-dashboard-web.service')
+        try:
+            run('/usr/sbin/nginx','-e','/var/log/v2ray-traffic-dashboard/error.log','-t','-c','/etc/v2ray-traffic-dashboard/nginx.conf')
+            run('systemctl','enable','--now','v2ray-traffic-dashboard-web.service')
+            run('systemctl','is-active','--quiet','v2ray-traffic-dashboard-web.service')
+        except Exception:
+            subprocess.run(['systemctl','status','v2ray-traffic-dashboard-web.service','--no-pager'])
+            subprocess.run(['journalctl','-u','v2ray-traffic-dashboard-web.service','-n','30','--no-pager'])
+            log=Path('/var/log/v2ray-traffic-dashboard/error.log')
+            if log.exists():print(log.read_text(),flush=True)
+            raise
         opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
         def status(path,credential=None):
             headers={}
