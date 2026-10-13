@@ -1,0 +1,16 @@
+{
+  "state_dir": "/var/lib/v2ray-traffic-dashboard",
+  "web_dir": "/var/www/v2ray-traffic-dashboard",
+  "v2ray_binary": "/usr/local/bin/v2ray",
+  "v2ray_service": "v2ray.service",
+  "stats_server": "127.0.0.1:10085",
+  "retention_days": 400,
+  "categories": [
+    {"id":"openai","label":"ChatGPT / OpenAI","tag":"usage-openai","domains":["domain:openai.com","domain:chatgpt.com","domain:chat.com","domain:oaistatic.com","domain:oaiusercontent.com","domain:sora.com"]},
+    {"id":"claude","label":"Claude / Anthropic","tag":"usage-claude","domains":["domain:anthropic.com","domain:claude.ai","domain:claude.com","domain:claudeusercontent.com"]},
+    {"id":"google","label":"Google（含 YouTube）","tag":"usage-google","domains":["domain:google.com","domain:googleapis.com","domain:gstatic.com","domain:googleusercontent.com","domain:youtube.com","domain:youtu.be","domain:ytimg.com","domain:googlevideo.com"]},
+    {"id":"apple","label":"Apple","tag":"usage-apple","domains":["domain:apple.com","domain:icloud.com","domain:icloud-content.com","domain:cdn-apple.com","domain:mzstatic.com","domain:aaplimg.com"]},
+    {"id":"other","label":"其他域名","tag":"usage-other","domains":["regexp:.+"]},
+    {"id":"unidentified","label":"未识别域名 / IP 直连","tag":"usage-unidentified","domains":[]}
+  ]
+}
