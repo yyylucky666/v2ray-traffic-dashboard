@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>代理流量统计</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main class="dashboard">
+    <header class="page-head">
+      <div><div class="eyebrow">V2Ray · Traffic Dashboard</div><h1>代理流量统计</h1><p class="subtitle">按服务分类，查看每天和每月的实际上传与下载。</p></div>
+      <div class="sync"><span id="statusDot" class="status-dot"></span><span id="syncLabel" role="status">正在读取统计</span></div>
+    </header>
+
+    <p id="demoBanner" class="alert" hidden>演示数据：所有数字均为程序生成，与任何真实服务器或访问记录无关。</p>
+    <section class="toolbar" aria-label="统计筛选">
+      <div class="tabs" role="tablist" aria-label="统计周期">
+        <button id="dayTab" type="button" role="tab" aria-selected="true" aria-controls="statistics">日统计</button>
+        <button id="monthTab" type="button" role="tab" aria-selected="false" aria-controls="statistics">月统计</button>
+      </div>
+      <div class="period-control"><label id="periodLabel" for="periodInput">日期</label><input id="periodInput" type="date" aria-label="选择统计日期"></div>
+      <div class="toolbar-actions"><button id="todayButton" class="button quiet" type="button">回到今天</button><button id="refreshButton" class="button" type="button">刷新</button></div>
+    </section>
+
+    <div id="alert" class="alert" role="alert" hidden></div>
+    <section id="statistics" aria-live="polite">
+      <div class="section-title"><h2 id="periodTitle">今天的流量</h2><span id="periodNote" class="muted">北京时间 · 每 2 分钟更新</span></div>
+      <div class="metrics">
+        <article class="metric"><span class="metric-label">上传流量 <span class="direction upload">↑</span></span><div id="uploadMetric" class="metric-value">—</div><span class="metric-caption">发送到目标服务的数据</span></article>
+        <article class="metric"><span class="metric-label">下载流量 <span class="direction download">↓</span></span><div id="downloadMetric" class="metric-value">—</div><span class="metric-caption">从目标服务接收的数据</span></article>
+        <article class="metric total"><span class="metric-label">总流量</span><div id="totalMetric" class="metric-value">—</div><span class="metric-caption">上传与下载合计</span></article>
+      </div>
+
+      <section class="panel">
+        <div class="panel-head"><div><h2>各类服务</h2><p class="muted">按总流量排序</p></div><button id="exportButton" type="button" class="button quiet" disabled>导出 CSV</button></div>
+        <div id="empty" class="empty" hidden><strong>这个周期还没有统计记录</strong><p id="emptyDetail">换一个日期，或等下一次采样后刷新。</p></div>
+        <div class="table-wrap"><table id="categoryTable"><thead><tr><th scope="col">服务分类</th><th scope="col">上传</th><th scope="col">下载</th><th scope="col">总流量</th></tr></thead><tbody id="categoryRows"></tbody></table></div>
+        <div class="legend"><span><i class="upload-swatch"></i>上传</span><span><i class="download-swatch"></i>下载</span><span class="muted">条形长度表示各类总流量的相对大小</span></div>
+      </section>
+
+      <section class="panel trend-panel">
+        <div class="panel-head"><div><h2 id="trendTitle">最近 7 天</h2><p class="muted">点击柱形查看当天的分类明细</p></div><span id="trendScale" class="muted"></span></div>
+        <div id="trend" class="trend" aria-label="每日流量趋势"></div>
+        <p id="trendEmpty" class="muted" hidden>有统计记录后，这里会显示每日流量。</p>
+      </section>
+    </section>
+    <footer>
+      <p id="timestamps">正在读取采样时间…</p>
+      <details><summary>统计口径与记录范围</summary><p>按目标服务域名归类，统计代理出站的实际字节数。网页使用的第三方资源会进入其对应服务分类；无法识别域名的连接单独列出。</p><p>统计从启用时开始，旧流量无法补算。这里的字节数与云服务商账单的网络计费口径有差异。跨午夜的采样增量计入采样当天，重启时未采到的尾部流量可能遗漏。</p><p>记录保留时长由服务端配置。页面只读取汇总数据，不提供代理开关或配置操作。</p></details>
+    </footer>
+  </main>
+</body>
+</html>

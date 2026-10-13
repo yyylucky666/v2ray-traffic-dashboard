@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "v2ray-traffic-dashboard"
+version = "0.1.0"
+description = "Lightweight self-hosted V2Ray category traffic accounting and static dashboard"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "v2ray-traffic-dashboard contributors"}]
+dependencies = []
+
+[project.scripts]
+v2ray-traffic-dashboard = "v2ray_traffic_dashboard.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
