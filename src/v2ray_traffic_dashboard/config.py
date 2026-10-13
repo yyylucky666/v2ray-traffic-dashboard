@@ -38,4 +38,15 @@ def load(path):
             raise ValueError('Category domains must be a list of nonempty strings')
     if any(not c['domains'] for c in categories[:-1]) or categories[-1]['domains']:
         raise ValueError('Exactly one catch-all category with empty domains must be last')
+    options = data.get('domain_list', {})
+    if not isinstance(options, dict) or not isinstance(options.get('enabled', False), bool):
+        raise ValueError('domain_list.enabled must be a boolean')
+    if options.get('enabled'):
+        if not Path(options.get('access_log', '')).is_absolute():
+            raise ValueError('domain_list.access_log must be an absolute path')
+        other = next((c for c in categories if c['id'] == 'other'), None)
+        if other is None or options.get('tag', 'usage-other') != other['tag']:
+            raise ValueError('domain_list.tag must match the other category outbound tag')
+        from zoneinfo import ZoneInfo
+        ZoneInfo(options.get('log_timezone', 'UTC'))
     return data

@@ -41,6 +41,9 @@ def main():
         if any(d==state or d in state.parents for d in directories):
             raise ValueError('State directory overlaps removable directories')
         if not args.destdir:
+            if any(str(f).endswith(NAME+'-domains.timer') for f in files):
+                subprocess.run(['systemctl','disable','--now',NAME+'-domains.timer'],check=True)
+                subprocess.run(['systemctl','stop',NAME+'-domains.service'],check=True)
             subprocess.run(['systemctl','disable','--now',NAME+'.timer',NAME+'-web.service'],check=True)
             subprocess.run(['systemctl','stop',NAME+'.service'],check=True)
         for f in files:

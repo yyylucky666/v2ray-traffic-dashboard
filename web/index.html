@@ -42,6 +42,14 @@
         <div class="legend"><span><i class="upload-swatch"></i>上传</span><span><i class="download-swatch"></i>下载</span><span class="muted">条形长度表示各类总流量的相对大小</span></div>
       </section>
 
+      <section id="domainPanel" class="panel domain-panel" hidden>
+        <div class="panel-head"><div><h2 id="domainTitle">其他域名</h2><p class="muted">连接记录数不等于网页访问次数，也不代表各域名的流量。</p></div><button id="domainClose" class="button quiet" type="button">收起</button></div>
+        <div class="domain-content"><p id="domainStatus" role="status"></p><label for="domainSearch">搜索域名</label><input id="domainSearch" type="search" placeholder="输入域名关键词" autocomplete="off">
+        <table id="domainTable"><thead><tr><th scope="col">域名</th><th scope="col">连接记录数</th><th scope="col">最近出现（北京时间）</th></tr></thead><tbody id="domainRows"></tbody></table>
+        <div class="domain-pagination"><button id="domainPrevious" type="button" class="button">上一页</button><span id="domainPage" class="muted"></span><button id="domainNext" type="button" class="button">下一页</button></div>
+        <p id="domainCoverage" class="muted domain-coverage"></p></div>
+      </section>
+
       <section class="panel trend-panel">
         <div class="panel-head"><div><h2 id="trendTitle">最近 7 天</h2><p class="muted">点击柱形查看当天的分类明细</p></div><span id="trendScale" class="muted"></span></div>
         <div id="trend" class="trend" aria-label="每日流量趋势"></div>

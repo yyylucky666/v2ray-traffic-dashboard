@@ -12,5 +12,6 @@
     {"id":"apple","label":"Apple","tag":"usage-apple","domains":["domain:apple.com","domain:icloud.com","domain:icloud-content.com","domain:cdn-apple.com","domain:mzstatic.com","domain:aaplimg.com"]},
     {"id":"other","label":"其他域名","tag":"usage-other","domains":["regexp:.+"]},
     {"id":"unidentified","label":"未识别域名 / IP 直连","tag":"usage-unidentified","domains":[]}
-  ]
+  ],
+  "domain_list": {"enabled": false, "access_log": "/var/log/v2ray/access.log", "tag": "usage-other", "log_timezone": "UTC"}
 }
