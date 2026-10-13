@@ -11,6 +11,8 @@ sudo sh -c 'umask 077; mkdir -p /root/vtd-backup; cp -p /var/lib/v2ray-traffic-d
 sudo systemctl start v2ray-traffic-dashboard.timer
 ```
 
+启用了域名清单时，还需停止 `v2ray-traffic-dashboard-domains.timer` 并等待其 service 结束，把独立 `domains.sqlite3` 一起备份，完成后重新启动原来启用的域名 timer。
+
 备份是私有数据，不上传公开仓库。首次采样之前可能没有数据库；确认文件存在再备份。
 
 ## 恢复

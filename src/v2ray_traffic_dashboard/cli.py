@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 from . import __version__
-from . import accounting, config, exporter
+from . import accounting, config, exporter, domain_list
 from .classification import candidate
 
 
@@ -17,6 +17,7 @@ def main():
     sub.add_parser('collect')
     sub.add_parser('doctor')
     sub.add_parser('export')
+    sub.add_parser('domains')
     report = sub.add_parser('report')
     report.add_argument('--period', default='today')
     report.add_argument('--json', action='store_true')
@@ -44,6 +45,13 @@ def main():
                 raise RuntimeError('Statistics API is unavailable')
             accounting.parse_counters(json.loads(r.stdout), cfg['categories'])
             print('V2Ray process, loopback API and category counters are available; counters were not reset.')
+        elif args.command == 'domains':
+            options = cfg.get('domain_list', {})
+            if not options.get('enabled', False):
+                raise ValueError('Domain inventory is disabled; review domain_list configuration first')
+            domain_list.collect(root / 'domains.sqlite3', options['access_log'], options.get('tag', 'usage-other'),
+                                options.get('log_timezone', 'UTC'), cfg.get('retention_days', 400))
+            domain_list.export(root / 'domains.sqlite3', Path(cfg['web_dir']) / 'data')
         elif args.command == 'collect':
             accounting.collect(root, cfg['stats_server'], cfg['v2ray_binary'], cfg['v2ray_service'],
                                cfg['categories'], cfg.get('retention_days', 400))

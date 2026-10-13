@@ -65,7 +65,9 @@ def build(args):
     service_path = args.unit_dir + '/' + NAME + '.service'
     timer_path = args.unit_dir + '/' + NAME + '.timer'
     web_service = args.unit_dir + '/' + NAME + '-web.service'
-    if any(target(p).exists() for p in (service_path,timer_path,web_service)):
+    domain_service = args.unit_dir + '/' + NAME + '-domains.service'
+    domain_timer = args.unit_dir + '/' + NAME + '-domains.timer'
+    if any(target(p).exists() for p in (service_path,timer_path,web_service,domain_service,domain_timer)):
         raise ValueError('Dashboard unit already exists')
     rotation='/etc/logrotate.d/'+NAME
     if target(rotation).exists():
@@ -128,6 +130,35 @@ AccuracySec=5s
 [Install]
 WantedBy=timers.target
 ''')
+    write(domain_service,f'''[Unit]
+Description=Collect other-category destination names without touching proxy counters
+
+[Service]
+Type=oneshot
+ExecStart={command} domains
+Nice=19
+CPUQuota=20%
+MemoryMax=64M
+TimeoutStartSec=60s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateNetwork=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={args.state_dir} {args.web_dir}/data
+''')
+    write(domain_timer,'''[Unit]
+Description=Collect domain inventory every two minutes (opt-in)
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=2min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
+''')
     write(args.config_dir+'/nginx.conf',f'''user {args.web_user} {web_group};
 worker_processes 1;
 pid /run/{NAME}-web.pid;
@@ -164,7 +195,7 @@ http {{
         add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'" always;
         location = / {{ try_files /index.html =404; }}
         location ~ ^/(index\\.html|app\\.js|style\\.css|favicon\\.svg)$ {{ try_files $uri =404; }}
-        location ~ "^/data/(index|[0-9]{{4}}-[0-9]{{2}})\\.json$" {{ try_files $uri =404; }}
+        location ~ "^/data/(domains-)?(index|[0-9]{{4}}-[0-9]{{2}})\\.json$" {{ try_files $uri =404; }}
         location / {{ return 404; }}
     }}
 }}

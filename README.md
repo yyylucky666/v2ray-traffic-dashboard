@@ -1,6 +1,6 @@
 # v2ray-traffic-dashboard
 
-轻量、自托管的 **V2Ray 分类流量统计面板**。按服务分类记录每天、每月的上传、下载和总流量，用静态网页展示；支持手机布局、每日趋势和 CSV 导出。
+轻量、自托管的 **V2Ray 分类流量统计面板**。按服务分类记录每天、每月的上传、下载和总流量，用静态网页展示；支持手机布局、每日趋势、CSV 导出，以及可选的“其他域名”连接清单。
 
 **English:** A lightweight, self-hosted V2Ray category traffic dashboard. Cumulative outbound counters are sampled into SQLite, exported as static JSON, and displayed in a responsive web UI. No runtime Python packages, frontend build step or always-on application server.
 
@@ -76,7 +76,7 @@ sudo python3 scripts/install.py --apply --nginx-binary /usr/sbin/nginx --web-use
 | SQLite 私有统计数据 | `/var/lib/v2ray-traffic-dashboard` |
 | 网页和静态汇总 | `/var/www/v2ray-traffic-dashboard` |
 | 网页日志 | `/var/log/v2ray-traffic-dashboard` |
-| 独立 systemd unit | `v2ray-traffic-dashboard.service/.timer`、`v2ray-traffic-dashboard-web.service` |
+| 独立 systemd unit | `v2ray-traffic-dashboard.service/.timer`、`v2ray-traffic-dashboard-web.service`、可选 `v2ray-traffic-dashboard-domains.service/.timer` |
 
 支持 `--prefix`、`--state-dir`、`--web-dir`、`--config-dir`、`--unit-dir`、`--log-dir`、`--port`。自定义路径后，下列命令中的默认路径也要对应修改。安装完成时服务尚未启动，网页默认仅监听 `127.0.0.1:8080`，且必须有密码文件。
 
@@ -122,6 +122,12 @@ sudo systemctl enable --now v2ray-traffic-dashboard-web.service
 ```
 
 它使用自己的 Nginx 配置和 PID，不会 reload 系统现有 Nginx。若共用 80/443，请使用已有 HTTPS 入口反代本机 8080，不争用端口。浏览器会弹出标准 HTTP Basic 登录框；不要关闭认证后公开访问。
+
+## 可选：显示“其他域名”清单
+
+分类流量继续来自 V2Ray 的实际字节计数器。清单另从已有 access log 增量读取目标域名，展示日/月连接记录数及最近出现时间；**连接记录数不等于网页访问次数，不用于估算每个域名的字节流量**。
+
+详细安装、权限、日志轮转与覆盖范围见[域名清单说明](docs/domain-list.md)。默认关闭；已有分类和访问日志符合格式时，启用只需启动本项目的独立 timer，不需要重启 V2Ray。清单会暴露访问的目标域名，因此 HTML、脚本和新 JSON 必须统一保留 HTTPS 和登录保护。
 
 ## 查看、排错与备份
 
