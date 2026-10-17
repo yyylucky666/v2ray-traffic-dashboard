@@ -1,6 +1,8 @@
 import datetime as dt
 import importlib.util
 from pathlib import Path
+import sqlite3
+import json
 import tempfile
 import unittest
 
@@ -76,6 +78,48 @@ class AccountingTests(unittest.TestCase):
                          {'name': 'outbound>>>usage-openai>>>traffic>>>downlink', 'value': '42'}]}
         self.assertEqual(traffic.parse_counters(data, [{'id': 'openai', 'tag': 'usage-openai'}]),
                          {'openai': {'uplink': 0, 'downlink': 42}})
+
+
+    def test_hourly_and_daily_share_exact_deltas(self):
+        self.sample(0,100,200)
+        self.sample(2,140,260)
+        self.sample(62,240,460)
+        self.assertEqual(self.db.execute('SELECT SUM(uplink),SUM(downlink) FROM hourly').fetchone(),self.totals())
+        self.assertEqual(self.db.execute('SELECT hour,uplink,downlink FROM hourly ORDER BY hour').fetchall(),[
+            ('2026-10-12T12:00:00+08:00',40,60),('2026-10-12T13:00:00+08:00',100,200)])
+        self.assertEqual(self.db.execute("SELECT value FROM meta WHERE key='hourly_started_at'").fetchone()[0],self.t.isoformat())
+
+    def test_hour_boundary_uses_sampling_end_and_beijing_timezone(self):
+        self.t=dt.datetime(2026,10,12,4,59,tzinfo=dt.timezone.utc)
+        self.sample(0,10,20);self.sample(2,110,220)
+        self.assertEqual(self.db.execute('SELECT hour FROM hourly').fetchone()[0],'2026-10-12T13:00:00+08:00')
+        self.assertEqual(self.totals(),(100,200))
+
+    def test_upgrade_does_not_redistribute_historic_daily_totals(self):
+        self.sample(0,10,20)
+        self.db.execute('DROP TABLE hourly')
+        self.db.execute("DELETE FROM meta WHERE key='hourly_started_at'")
+        self.db.execute("INSERT INTO daily VALUES ('2026-10-12','openai',5000,9000)")
+        self.db.commit();self.db.close()
+        self.db=traffic.connect_db(Path(self.tmp.name)/'test.sqlite3')
+        self.sample(2,110,220)
+        self.assertEqual(self.totals(),(5100,9200))
+        self.assertEqual(self.db.execute('SELECT SUM(uplink),SUM(downlink) FROM hourly').fetchone(),(100,200))
+
+    def test_hourly_write_failure_rolls_back_daily_and_cursor(self):
+        self.sample(0,10,20)
+        self.db.execute("CREATE TRIGGER fail_hourly BEFORE INSERT ON hourly BEGIN SELECT RAISE(ABORT,'fixture failure'); END")
+        with self.assertRaises(sqlite3.IntegrityError):self.sample(2,110,220)
+        self.assertEqual(self.totals(),(0,0))
+        self.assertEqual(json.loads(self.db.execute("SELECT value FROM meta WHERE key='sample'").fetchone()[0])['at'],self.t.isoformat())
+        self.db.execute('DROP TRIGGER fail_hourly');self.sample(4,210,420)
+        self.assertEqual(self.totals(),(200,400))
+
+    def test_hourly_reset_and_retention(self):
+        self.sample(0,100,200);self.sample(2,120,240);self.sample(4,10,250)
+        self.assertEqual(self.db.execute('SELECT SUM(uplink),SUM(downlink) FROM hourly').fetchone(),(30,50))
+        traffic.record_sample(self.db,self.t+dt.timedelta(days=3),'two',{'openai':{'uplink':5,'downlink':6}},retention_days=2)
+        self.assertEqual(self.db.execute('SELECT hour FROM hourly').fetchall(),[('2026-10-15T12:00:00+08:00',)])
 
 
 if __name__ == '__main__':

@@ -21,6 +21,10 @@ def connect_db(path):
             day TEXT NOT NULL, category TEXT NOT NULL,
             uplink INTEGER NOT NULL, downlink INTEGER NOT NULL,
             PRIMARY KEY(day, category));
+        CREATE TABLE IF NOT EXISTS hourly (
+            hour TEXT NOT NULL, category TEXT NOT NULL,
+            uplink INTEGER NOT NULL, downlink INTEGER NOT NULL,
+            PRIMARY KEY(hour, category));
         CREATE TABLE IF NOT EXISTS events (
             at TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL);
     ''')
@@ -55,6 +59,7 @@ def record_sample(db, now, epoch, counters, retention_days=400):
             prior_time = dt.datetime.fromisoformat(previous['at'])
             if now <= prior_time:
                 raise ValueError('Clock did not advance; sample not committed')
+            db.execute("INSERT OR IGNORE INTO meta VALUES ('hourly_started_at',?)", (prior_time.astimezone(TZ).isoformat(),))
             gap = (now - prior_time).total_seconds()
             if gap > 300:
                 db.execute('INSERT INTO events VALUES (?,?,?)',
@@ -81,14 +86,21 @@ def record_sample(db, now, epoch, counters, retention_days=400):
                     ON CONFLICT(day, category) DO UPDATE SET
                     uplink=uplink+excluded.uplink, downlink=downlink+excluded.downlink''',
                            (day, category, delta['uplink'], delta['downlink']))
+                hour = now.astimezone(TZ).replace(minute=0, second=0, microsecond=0).isoformat()
+                db.execute('''INSERT INTO hourly VALUES (?,?,?,?)
+                    ON CONFLICT(hour, category) DO UPDATE SET
+                    uplink=uplink+excluded.uplink, downlink=downlink+excluded.downlink''',
+                           (hour, category, delta['uplink'], delta['downlink']))
         else:
             db.execute('INSERT INTO meta VALUES (?,?)', ('started_at', now.isoformat()))
+            db.execute("INSERT OR IGNORE INTO meta VALUES ('hourly_started_at',?)", (now.astimezone(TZ).isoformat(),))
             db.execute('INSERT INTO events VALUES (?,?,?)',
                        (now.isoformat(), 'baseline', 'Counters seeded; historical traffic excluded'))
         db.execute("INSERT OR REPLACE INTO meta VALUES ('sample',?)",
                    (json.dumps(current, separators=(',', ':')),))
         cutoff = (now.astimezone(TZ).date() - dt.timedelta(days=retention_days - 1)).isoformat()
         db.execute('DELETE FROM daily WHERE day < ?', (cutoff,))
+        db.execute('DELETE FROM hourly WHERE hour < ?', (cutoff,))
         db.execute('DELETE FROM events WHERE at < ?', (cutoff,))
 
 

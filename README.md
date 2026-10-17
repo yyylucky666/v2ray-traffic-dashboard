@@ -1,6 +1,6 @@
 # v2ray-traffic-dashboard
 
-轻量、自托管的 **V2Ray 分类流量统计面板**。按服务分类记录每天、每月的上传、下载和总流量，用静态网页展示；支持手机布局、每日趋势、CSV 导出，以及可选的“其他域名”连接清单。
+轻量、自托管的 **V2Ray 分类流量统计面板**。按服务分类记录每天、每月的上传、下载和总流量，用静态网页展示；支持手机布局、每日趋势、当天每小时流量时间轴、CSV 导出，以及可选的“其他域名”连接清单。
 
 **English:** A lightweight, self-hosted V2Ray category traffic dashboard. Cumulative outbound counters are sampled into SQLite, exported as static JSON, and displayed in a responsive web UI. No runtime Python packages, frontend build step or always-on application server.
 
@@ -122,6 +122,14 @@ sudo systemctl enable --now v2ray-traffic-dashboard-web.service
 ```
 
 它使用自己的 Nginx 配置和 PID，不会 reload 系统现有 Nginx。若共用 80/443，请使用已有 HTTPS 入口反代本机 8080，不争用端口。浏览器会弹出标准 HTTP Basic 登录框；不要关闭认证后公开访问。
+
+## 每日流量时间轴
+
+“日统计”会展示北京时间 00:00–24:00 的上传/下载堆叠柱形，点击某个小时查看上传、下载和总流量；“时间轴分类”切换后立即显示该类服务的小时流量，顶部日总量保持全部分类口径。手机可横向滑动查看全天。
+
+小时明细与每日统计使用**同一次采样、同一事务的实际字节增量**，仍每两分钟采集，不增加代理连接或常驻进程。跨小时的采样增量计入采样结束所在小时；当前小时逐渐累积，采样中断/重置仍有原有边界提示。灰色“尚无小时记录”不代表零流量。
+
+升级前只有日总量，**无法回填历史小时流量**。新版首次采样时自动以幂等建表增加 `hourly`，保留原 `daily` 与采样游标，并在 `meta.hourly_started_at` 标明开始覆盖的时间。启用当天仅有部分小时，不能把小时小计当成全天总量。只需升级本项目采集器、导出器和网页，V2Ray 配置和进程无需更改。升级及备份说明见 [维护说明](docs/maintenance.md)。
 
 ## 可选：显示“其他域名”清单
 

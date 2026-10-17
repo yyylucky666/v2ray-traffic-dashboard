@@ -43,4 +43,27 @@ class ExportTests(unittest.TestCase):
         self.assertFalse((self.out/'2020-01.json').exists())
 
 
+    def test_legacy_export_has_explicit_no_hourly_history(self):
+        index=exporter.export(self.db,self.categories,self.out,self.now)
+        self.assertIsNone(index['hourly_started_at'])
+        data=json.loads((self.out/'2026-10.json').read_text())
+        self.assertEqual(data['hourly'],{})
+        self.assertEqual(index['month_totals']['2026-10'],{'upload':150,'download':180})
+
+    def test_hourly_export_preserves_categories_and_hour_boundaries(self):
+        db=sqlite3.connect(self.db)
+        db.execute('CREATE TABLE hourly(hour TEXT,category TEXT,uplink INT,downlink INT)')
+        db.execute('INSERT INTO meta VALUES (?,?)',('hourly_started_at','2026-10-13T08:59:00+08:00'))
+        db.executemany('INSERT INTO hourly VALUES (?,?,?,?)',[
+            ('2026-10-13T09:00:00+08:00','openai',10,20),('2026-10-13T10:00:00+08:00','google',30,40),
+            ('2026-10-13T10:00:00+08:00','secret-category',999,999)])
+        db.commit();db.close()
+        before=hashlib.sha256(self.db.read_bytes()).hexdigest()
+        index=exporter.export(self.db,self.categories,self.out,self.now)
+        data=json.loads((self.out/'2026-10.json').read_text())
+        self.assertEqual(data['hourly']['2026-10-13'],{'09':{'openai':{'upload':10,'download':20}},'10':{'google':{'upload':30,'download':40}}})
+        self.assertEqual(index['hourly_started_at'],'2026-10-13T08:59:00+08:00')
+        self.assertEqual(before,hashlib.sha256(self.db.read_bytes()).hexdigest())
+
+
 if __name__=='__main__': unittest.main()

@@ -26,6 +26,7 @@ def build(output,now=None):
     db=accounting.connect_db(output/'synthetic.sqlite3')
     try:
         db.execute('INSERT INTO meta VALUES (?,?)',('started_at',dt.datetime.combine(first,dt.time(8),accounting.TZ).isoformat()))
+        db.execute('INSERT INTO meta VALUES (?,?)',('hourly_started_at',dt.datetime.combine(first,dt.time(8),accounting.TZ).isoformat()))
         db.execute('INSERT INTO meta VALUES (?,?)',('sample',json.dumps({'at':now.isoformat(),'epoch':'synthetic-demo','counters':{}})))
         for offset in range(35):
             day=first+dt.timedelta(days=offset)
@@ -33,6 +34,15 @@ def build(output,now=None):
                 up=(offset+3)*(n+1)*17123
                 down=(offset%7+2)*(7-n)*982345
                 db.execute('INSERT INTO daily VALUES (?,?,?,?)',(day.isoformat(),c['id'],up,down))
+                hours=list(range(8 if day==first else 0,(now.astimezone(accounting.TZ).hour+1) if day==today else 24))
+                weights=[(h+1)*(4 if 18<=h<=21 else 1) for h in hours];total=sum(weights)
+                used_up=used_down=0
+                for i,(hour,weight) in enumerate(zip(hours,weights)):
+                    hourly_up=up-used_up if i==len(hours)-1 else up*weight//total
+                    hourly_down=down-used_down if i==len(hours)-1 else down*weight//total
+                    stamp=dt.datetime.combine(day,dt.time(hour),accounting.TZ).isoformat()
+                    db.execute('INSERT INTO hourly VALUES (?,?,?,?)',(stamp,c['id'],hourly_up,hourly_down))
+                    used_up+=hourly_up;used_down+=hourly_down
         db.commit()
     finally:db.close()
     index=exporter.export(output/'synthetic.sqlite3',cfg,output/'web/data',now)

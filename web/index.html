@@ -35,6 +35,20 @@
         <article class="metric total"><span class="metric-label">总流量</span><div id="totalMetric" class="metric-value">—</div><span class="metric-caption">上传与下载合计</span></article>
       </div>
 
+      <section id="hourlyPanel" class="panel hourly-panel" aria-labelledby="hourlyTitle">
+        <div class="panel-head"><div><h2 id="hourlyTitle">当天流量时间轴</h2><p class="muted">按小时汇总 · 北京时间 · 点击柱形查看明细</p></div><label class="hourly-filter" for="hourlyCategory">时间轴分类<select id="hourlyCategory"><option value="all">全部分类</option></select></label></div>
+        <p id="hourlyCoverage" class="hourly-note muted"></p>
+        <div id="hourlyEmpty" class="empty" hidden><strong>这一天还没有小时统计</strong><p>此前只有每日汇总，无法补算历史时段流量。</p></div>
+        <div id="hourlyBody">
+          <div class="hourly-scroll" id="hourlyScroll" tabindex="0" role="region" aria-label="24 小时流量图，手机上可横向滑动">
+            <div id="hourlyChart" class="hourly-chart" aria-label="每小时上传与下载流量"></div>
+          </div>
+          <p id="hourlyDetail" class="hourly-detail" aria-live="polite"></p>
+          <p id="hourlySummary" class="hourly-note"></p>
+        </div>
+        <div class="legend"><span><i class="upload-swatch"></i>上传</span><span><i class="download-swatch"></i>下载</span><span class="muted">灰色表示尚无小时记录；可横向滑动查看全天</span></div>
+      </section>
+
       <section class="panel">
         <div class="panel-head"><div><h2>各类服务</h2><p class="muted">按总流量排序</p></div><button id="exportButton" type="button" class="button quiet" disabled>导出 CSV</button></div>
         <div id="empty" class="empty" hidden><strong>这个周期还没有统计记录</strong><p id="emptyDetail">换一个日期，或等下一次采样后刷新。</p></div>
