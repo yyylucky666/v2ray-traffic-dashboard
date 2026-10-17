@@ -36,6 +36,8 @@ def export(db_path, categories_path, output, now=None):
         meta = dict(db.execute('SELECT key,value FROM meta'))
         last_sample = json.loads(meta['sample'])['at']
         rows = db.execute('SELECT day,category,uplink,downlink FROM daily ORDER BY day,category').fetchall()
+        has_hourly = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='hourly'").fetchone()
+        hourly_rows = db.execute('SELECT hour,category,uplink,downlink FROM hourly ORDER BY hour,category').fetchall() if has_hourly else []
         quality = db.execute("SELECT substr(at,1,10),kind,COUNT(*) FROM events WHERE kind IN ('counter_reset','sampling_gap') GROUP BY substr(at,1,10),kind").fetchall()
     finally:
         db.close()
@@ -49,6 +51,10 @@ def export(db_path, categories_path, output, now=None):
         total = day_totals.setdefault(day, {'upload': 0, 'download': 0})
         total['upload'] += up
         total['download'] += down
+    hourly_days = {}
+    for hour, category, up, down in hourly_rows:
+        if category in ids:
+            hourly_days.setdefault(hour[:10], {}).setdefault(hour[11:13], {})[category] = {'upload': up, 'download': down}
     current_month = now.strftime('%Y-%m')
     by_month.setdefault(current_month, {})
     quality_days = {}
@@ -63,10 +69,11 @@ def export(db_path, categories_path, output, now=None):
         month_totals[month] = {'upload': upload, 'download': download}
         atomic_json(output / (month + '.json'), {
             'schema': 1, 'month': month, 'last_sample': last_sample,
-            'days': days, 'quality': {d: v for d, v in quality_days.items() if d.startswith(month)}})
+            'days': days, 'hourly': {d: v for d, v in hourly_days.items() if d.startswith(month)},
+            'hourly_started_at': meta.get('hourly_started_at'), 'quality': {d: v for d, v in quality_days.items() if d.startswith(month)}})
     recent = sorted(day_totals)[-14:]
     index = {'schema': 1, 'timezone': 'Asia/Shanghai', 'started_at': meta['started_at'],
-             'last_sample': last_sample, 'generated_at': now.isoformat(), 'categories': public_categories,
+             'hourly_started_at': meta.get('hourly_started_at'), 'last_sample': last_sample, 'generated_at': now.isoformat(), 'categories': public_categories,
              'months': sorted(by_month, reverse=True), 'month_totals': month_totals,
              'recent_days': {d: day_totals[d] for d in recent}}
     # Publish index last, after every referenced monthly file exists.
