@@ -11,7 +11,7 @@ import sys
 
 SOURCE=Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(SOURCE/'src'))
-from v2ray_traffic_dashboard import accounting,exporter
+from v2ray_traffic_dashboard import accounting,exporter,domain_list
 
 
 def build(output,now=None):
@@ -38,6 +38,19 @@ def build(output,now=None):
     index=exporter.export(output/'synthetic.sqlite3',cfg,output/'web/data',now)
     index['demo']=True
     exporter.atomic_json(output/'web/data/index.json',index)
+    db=domain_list.connect(output/'synthetic-domains.sqlite3')
+    try:
+        for key,value in {'recording_started_at':now.isoformat(),'first_record_at':dt.datetime.combine(first,dt.time(8),accounting.TZ).isoformat(),'last_collected_at':now.isoformat(),'caught_up':True,'max_domains_per_day':1000}.items():
+            domain_list.put(db,key,value)
+        for offset in range(35):
+            day=first+dt.timedelta(days=offset)
+            for n in range(25):
+                host=('a-very-long-synthetic-destination-hostname.' if n==0 else 'service-'+str(n)+'.')+'example.com'
+                stamp=dt.datetime.combine(day,dt.time(16,n),accounting.TZ).isoformat()
+                db.execute('INSERT INTO domains VALUES (?,?,?,?)',(day.isoformat(),host,offset+n+1,stamp))
+        db.commit()
+    finally:db.close()
+    domain_list.export(output/'synthetic-domains.sqlite3',output/'web/data')
     return output/'web'
 
 
