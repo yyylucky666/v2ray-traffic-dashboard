@@ -68,6 +68,12 @@ def main():
                 assert headers['X-Content-Type-Options']=='nosniff'
             assert status('/','wrong-password')[0]==401
             index=json.loads(status('/data/index.json',password)[1]);assert len(index['categories'])==6
+            assert index['hourly_started_at']
+            month=index['months'][0];data=json.loads(status('/data/'+month+'.json',password)[1])
+            for day,categories in data['days'].items():
+                daily=sum(v['upload']+v['download'] for v in categories.values())
+                hourly=sum(v['upload']+v['download'] for values in data['hourly'][day].values() for v in values.values())
+                assert daily==hourly
             run('logrotate','-d','/etc/logrotate.d/v2ray-traffic-dashboard',capture_output=True)
             saved=(state/'traffic.sqlite3').read_bytes()
             domain_saved=(state/'domains.sqlite3').read_bytes()
