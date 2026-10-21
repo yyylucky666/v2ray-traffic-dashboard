@@ -34,6 +34,22 @@ const {chromium}=require('playwright');
   const dayActual=(await amounts()).reduce((s,r)=>s+r[2],0);assert.equal(dayActual,dayExpected);
   assert.equal(await page.locator('#categoryRows tr').count(),index.categories.length);
   assert.equal(await page.locator('.hour-button').count(),24);
+  assert.equal(await page.locator('#hourlyAxis .hourly-tick').count(),5,'hourly chart needs a numeric vertical scale');
+  const verifyAxis=async(target=page)=>{
+   const geometry=await target.evaluate(()=>{
+    const axis=document.getElementById('hourlyAxis'),chart=document.getElementById('hourlyChart'),grid=chart.querySelector('.hourly-grid');
+    return{max:Number(axis.dataset.max),unit:document.getElementById('hourlyUnit').textContent,
+     ticks:[...axis.children].map(t=>({bytes:Number(t.dataset.bytes),y:t.getBoundingClientRect().top+t.getBoundingClientRect().height/2})),
+     lines:[...grid.children].map(l=>l.getBoundingClientRect().bottom),height:grid.getBoundingClientRect().height,
+     bars:[...chart.querySelectorAll('.hour-button[data-known="true"]')].map(b=>({total:Number(b.dataset.upload)+Number(b.dataset.download),height:b.querySelector('.hour-bars').getBoundingClientRect().height,bottom:b.querySelector('.hour-bars').getBoundingClientRect().bottom})),baseline:grid.getBoundingClientRect().bottom};
+   });
+   assert.ok(Number.isFinite(geometry.max)&&geometry.max>0);
+   assert.equal(geometry.ticks.length,5);assert.equal(geometry.ticks[0].bytes,0);assert.equal(geometry.ticks[4].bytes,geometry.max);
+   geometry.ticks.forEach((t,i)=>{assert.ok(Math.abs(t.y-geometry.lines[i])<1,'tick and horizontal gridline must align');if(i)assert.ok(t.bytes>geometry.ticks[i-1].bytes);});
+   geometry.bars.forEach(b=>{assert.ok(b.total<=geometry.max);assert.ok(Math.abs(b.height-b.total/geometry.max*geometry.height)<0.1,'bar height must match byte scale');assert.ok(Math.abs(b.bottom-geometry.baseline)<1,'bars must start at zero baseline');});
+   return geometry;
+  };
+  const initialScale=await verifyAxis();
   const hourlySum=()=>page.locator('.hour-button[data-known="true"]').evaluateAll(rows=>rows.reduce((s,r)=>s+Number(r.dataset.upload)+Number(r.dataset.download),0));
   assert.equal(await hourlySum(),dayActual);
   const hour=Object.keys(month.hourly[monthId]).sort()[0];
@@ -42,6 +58,7 @@ const {chromium}=require('playwright');
   assert.equal(Number(await page.locator('#hourlyDetail').getAttribute('data-total')),hourExpected);
   assert.equal(await page.locator(`.hour-button[data-hour="${hour}"]`).getAttribute('aria-pressed'),'true');
   await page.selectOption('#hourlyCategory','google');
+  const filteredScale=await verifyAxis();assert.ok(filteredScale.max<initialScale.max,'category filter must rescale the axis');
   assert.equal(await hourlySum(),month.days[monthId].google.upload+month.days[monthId].google.download);
   assert.equal((await amounts()).reduce((s,r)=>s+r[2],0),dayActual);
   await page.selectOption('#hourlyCategory','all');
@@ -88,6 +105,12 @@ const {chromium}=require('playwright');
   await page.click('#domainClose');await page.locator('#domainPanel').waitFor({state:'hidden'});assert.ok(await page.locator('#domainPanel').isHidden());
   await page.click('#domainToggle');await page.waitForFunction(()=>document.getElementById('domainRows').children.length===20);
   assert.ok(await page.locator('#exportButton').isVisible());assert.deepEqual(errors,[]);
+  await page.locator('#hourlyPanel').scrollIntoViewIfNeeded();
+  const axisX=(await page.locator('#hourlyAxis').boundingBox()).x;
+  const scroll=page.locator('#hourlyScroll');await scroll.evaluate(el=>el.scrollLeft=0);await scroll.hover();
+  await page.mouse.wheel(500,0);await page.waitForFunction(()=>document.getElementById('hourlyScroll').scrollLeft>100);
+  assert.equal((await page.locator('#hourlyAxis').boundingBox()).x,axisX,'mobile axis must remain fixed during horizontal scroll');
+  await verifyAxis();
   await page.locator('.hour-button[data-known="true"]').first().click();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.locator('#domainSearch').fill('very-long');
@@ -96,7 +119,23 @@ const {chromium}=require('playwright');
   await legacy.route('**/data/*.json',async route=>{if(route.request().url().includes('domains-'))return route.continue();const response=await route.fetch();const data=await response.json();delete data.hourly;delete data.hourly_started_at;await route.fulfill({response,json:data});});
   await legacy.goto(url);await legacy.waitForFunction(()=>!document.getElementById('statistics').hasAttribute('aria-busy'));
   assert.ok(await legacy.locator('#hourlyEmpty').isVisible());assert.ok((await legacy.locator('#hourlyCoverage').textContent()).includes('尚未启用'));await legacy.close();
-  console.log(JSON.stringify({hourlyExactTotals:true,hourClick:true,categoryAutoFilter:true,historicalDay:true,legacyCoverage:true,dayBytes:dayActual,monthBytes:monthActual,categories:index.categories.length,csvRows:lines.length,emptyPeriod:true,trendNavigation:true,desktop:true,mobile:true,errors}));
+  // Verify zero, byte-sized and large hourly totals using isolated synthetic responses.
+  for(const [peak,unit] of [[0,'B'],[1,'B'],[18*1024**2,'MiB'],[5*1024**3,'GiB']]){
+   const fixture=await context.newPage();
+   await fixture.route('**/data/*.json',async route=>{
+    if(route.request().url().includes('domains-'))return route.continue();
+    const response=await route.fetch(),data=await response.json();
+    if(data.hourly)data.hourly[monthId]={'12':{other:{upload:0,download:peak}}};
+    await route.fulfill({response,json:data});
+   });
+   await fixture.goto(url);await fixture.waitForFunction(()=>!document.getElementById('statistics').hasAttribute('aria-busy'));
+   const geometry=await verifyAxis(fixture);assert.equal(geometry.unit,`流量（${unit}）`);
+   assert.equal(geometry.bars.length,1);assert.equal(geometry.bars[0].total,peak);
+   assert.equal(await fixture.locator('.hour-button:disabled').count(),23,'missing hours must remain unknown');
+   if(peak===18*1024**2)assert.deepEqual(geometry.ticks.map(t=>t.bytes/1024**2),[0,5,10,15,20]);
+   await fixture.close();
+  }
+  console.log(JSON.stringify({hourlyAxis:true,scaleGeometry:true,zeroAndLargeValues:true,fixedMobileAxis:true,hourlyExactTotals:true,hourClick:true,categoryAutoFilter:true,historicalDay:true,legacyCoverage:true,dayBytes:dayActual,monthBytes:monthActual,categories:index.categories.length,csvRows:lines.length,emptyPeriod:true,trendNavigation:true,desktop:true,mobile:true,errors}));
   await context.close();
  }finally{
   if(browser)await browser.close();
