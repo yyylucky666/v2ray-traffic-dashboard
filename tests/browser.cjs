@@ -33,6 +33,9 @@ const {chromium}=require('playwright');
   const dayExpected=Object.values(month.days[monthId]).reduce((s,v)=>s+v.upload+v.download,0);
   const dayActual=(await amounts()).reduce((s,r)=>s+r[2],0);assert.equal(dayActual,dayExpected);
   assert.equal(await page.locator('#categoryRows tr').count(),index.categories.length);
+  assert.ok(await page.locator('#restoreDayButton').isHidden());
+  assert.equal(await page.locator('.hour-button[aria-pressed="true"]').count(),0);
+  const dailyMetrics=await page.locator('.metrics').textContent();
   assert.equal(await page.locator('.hour-button').count(),24);
   assert.equal(await page.locator('#hourlyAxis .hourly-tick').count(),5,'hourly chart needs a numeric vertical scale');
   const verifyAxis=async(target=page)=>{
@@ -57,15 +60,44 @@ const {chromium}=require('playwright');
   const hourExpected=Object.values(month.hourly[monthId][hour]).reduce((s,v)=>s+v.upload+v.download,0);
   assert.equal(Number(await page.locator('#hourlyDetail').getAttribute('data-total')),hourExpected);
   assert.equal(await page.locator(`.hour-button[data-hour="${hour}"]`).getAttribute('aria-pressed'),'true');
+  assert.equal((await amounts()).reduce((sum,row)=>sum+row[2],0),hourExpected,'clicked hour must filter category breakdown');
+  const verifyBreakdown=async(selectedHour)=>{
+   const values=month.hourly[monthId][selectedHour];
+   const rows=await page.locator('#categoryRows tr').evaluateAll(rows=>rows.map(row=>({id:row.dataset.category,bytes:[...row.cells].slice(1).map(td=>Number(td.title.replace(/[^0-9]/g,''))),share:Number(row.querySelector('.category-share').dataset.share)})));
+   const total=Object.values(values).reduce((sum,v)=>sum+v.upload+v.download,0);
+   for(const row of rows){const expected=values[row.id]||{upload:0,download:0};assert.deepEqual(row.bytes,[expected.upload,expected.download,expected.upload+expected.download]);assert.equal(row.share,total?(expected.upload+expected.download)/total:0);}
+   assert.equal(rows.length,index.categories.length);assert.ok(rows.every((row,i)=>!i||rows[i-1].bytes[2]>=row.bytes[2]));
+   assert.equal(await page.locator('#categoryScope').getAttribute('data-scope'),'hour');
+   assert.ok((await page.locator('#categoryScope').textContent()).includes(selectedHour+':00'));
+   assert.equal(await page.locator('.metrics').textContent(),dailyMetrics,'top metrics must stay daily');
+   assert.ok(await page.locator('#restoreDayButton').isVisible());
+   assert.equal(await page.locator('#domainToggle').count(),0,'daily domain list must not be presented as hourly');
+  };
+  await verifyBreakdown(hour);
+  const hourDownloading=page.waitForEvent('download');await page.click('#exportButton');
+  const hourDownload=await hourDownloading,hourCsvPath=path.join(temp,'hour.csv');await hourDownload.saveAs(hourCsvPath);
+  const hourCsv=(await fs.readFile(hourCsvPath,'utf8')).trim().split('\n');
+  assert.equal(hourCsv.slice(1).reduce((sum,line)=>sum+Number(line.trim().split(',').at(-1).replaceAll('"','')),0),hourExpected);
+  assert.ok(hourCsv[1].includes(monthId+' '+hour+':00'));assert.ok(hourDownload.suggestedFilename().includes('-'+hour+'时.csv'));
+  await page.click('#refreshButton');await settled();await verifyBreakdown(hour);
+
   await page.selectOption('#hourlyCategory','google');
   const filteredScale=await verifyAxis();assert.ok(filteredScale.max<initialScale.max,'category filter must rescale the axis');
   assert.equal(await hourlySum(),month.days[monthId].google.upload+month.days[monthId].google.download);
-  assert.equal((await amounts()).reduce((s,r)=>s+r[2],0),dayActual);
+  assert.equal((await amounts()).reduce((s,r)=>s+r[2],0),hourExpected);
+  await verifyBreakdown(hour);
   await page.selectOption('#hourlyCategory','all');
+  await page.click('#restoreDayButton');
+  assert.equal((await amounts()).reduce((s,r)=>s+r[2],0),dayActual);
+  assert.equal(await page.locator('#categoryScope').getAttribute('data-scope'),'day');
+  assert.equal(await page.locator('.hour-button[aria-pressed="true"]').count(),0);
   const oldDay=Object.keys(month.days).filter(d=>d<monthId).sort().at(-1);
-  if(oldDay){await page.locator('#periodInput').fill(oldDay);await page.locator('#periodInput').dispatchEvent('change');await settled();
+  if(oldDay){await page.locator(`.hour-button[data-hour="${hour}"]`).click();await page.locator('#periodInput').fill(oldDay);await page.locator('#periodInput').dispatchEvent('change');await settled();
    assert.equal(await hourlySum(),Object.values(month.days[oldDay]).reduce((s,v)=>s+v.upload+v.download,0));
    assert.equal(await page.locator('.hour-button[data-known="true"]').count(),24);
+   assert.ok(await page.locator('#restoreDayButton').isHidden());assert.equal(await page.locator('#categoryScope').getAttribute('data-scope'),'day');
+   await page.locator('.hour-button[data-hour="23"]').click();assert.ok((await page.locator('#categoryScope').textContent()).includes('23:00–24:00'));
+   assert.equal((await amounts()).reduce((sum,row)=>sum+row[2],0),Object.values(month.hourly[oldDay]['23']).reduce((sum,v)=>sum+v.upload+v.download,0));
    await page.click('#todayButton');await settled();}
   await page.click('#domainToggle');await page.waitForFunction(()=>document.getElementById('domainRows').children.length===20);
   assert.equal(await page.locator('#domainToggle').getAttribute('aria-expanded'),'true');
@@ -73,6 +105,11 @@ const {chromium}=require('playwright');
   const domains=await (await page.request.get(url+'/data/domains-'+monthId.slice(0,7)+'.json')).json();
   const domainCounts=()=>page.locator('#domainRows tr').evaluateAll(rows=>rows.map(r=>({host:r.cells[0].textContent,count:Number(r.cells[1].textContent.replaceAll(',',''))})));
   assert.deepEqual(await domainCounts(),domains.days[monthId].domains.slice(0,20).map(r=>({host:r.domain,count:r.connections})));
+  await page.locator(`.hour-button[data-hour="${hour}"]`).click();await verifyBreakdown(hour);
+  assert.ok(await page.locator('#domainPanel').isHidden());
+  await page.click('#restoreDayButton');await page.click('#domainToggle');
+  await page.waitForFunction(()=>document.getElementById('domainRows').children.length===20);
+
   await page.click('#domainNext');assert.equal(await page.locator('#domainRows tr').count(),5);
   await page.locator('#domainSearch').fill('very-long');assert.equal(await page.locator('#domainRows tr').count(),1);
   await page.locator('#domainSearch').fill('does-not-exist');assert.equal(await page.locator('#domainRows tr').count(),0);
@@ -81,6 +118,8 @@ const {chromium}=require('playwright');
   await page.waitForFunction(()=>document.getElementById('domainRows').children.length===20&&!document.getElementById('domainStatus').textContent.includes('正在读取'));
   assert.deepEqual(await domainCounts(),domains.monthly.domains.slice(0,20).map(r=>({host:r.domain,count:r.connections})));
   assert.ok(await page.locator('#hourlyPanel').isHidden());
+  assert.ok(await page.locator('#restoreDayButton').isHidden());
+  assert.equal(await page.locator('#categoryScope').getAttribute('data-scope'),'month');
   const monthActual=(await amounts()).reduce((s,r)=>s+r[2],0);
   assert.equal(monthActual,index.month_totals[monthId.slice(0,7)].upload+index.month_totals[monthId.slice(0,7)].download);
   const downloading=page.waitForEvent('download');await page.click('#exportButton');
@@ -97,7 +136,13 @@ const {chromium}=require('playwright');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.waitForFunction(()=>document.getElementById('domainRows').children.length===20);
   assert.ok(await page.locator('#domainPanel').isVisible());
-  if(process.env.VTD_SCREENSHOT)await page.screenshot({path:process.env.VTD_SCREENSHOT,fullPage:true});
+  if(process.env.VTD_SCREENSHOT){
+   const lastHour=Object.keys(month.hourly[monthId]).sort().at(-1);
+   await page.locator(`.hour-button[data-hour="${lastHour}"]`).click();await verifyBreakdown(lastHour);
+   await page.screenshot({path:process.env.VTD_SCREENSHOT,fullPage:true});
+   await page.click('#restoreDayButton');await page.click('#domainToggle');
+   await page.waitForFunction(()=>document.getElementById('domainRows').children.length===20);
+  }
   await page.setViewportSize({width:390,height:844});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.locator('#domainSearch').fill('very-long');
@@ -113,29 +158,42 @@ const {chromium}=require('playwright');
   await verifyAxis();
   await page.locator('.hour-button[data-known="true"]').first().click();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  await page.locator('#domainSearch').fill('very-long');
+  await verifyBreakdown(hour);
+  assert.ok(await page.locator('#domainPanel').isHidden());
+  assert.ok(await page.locator('#restoreDayButton').isVisible());
   if(process.env.VTD_SCREENSHOT)await page.screenshot({path:process.env.VTD_SCREENSHOT.replace('.png','-mobile.png'),fullPage:true});
+  await page.click('#restoreDayButton');
+  assert.equal((await amounts()).reduce((s,r)=>s+r[2],0),dayActual);
+  await page.locator(`.hour-button[data-hour="${hour}"]`).click();await page.click('#monthTab');await settled();
+  assert.equal(await page.locator('#categoryScope').getAttribute('data-scope'),'month');assert.ok(await page.locator('#restoreDayButton').isHidden());
+  assert.equal((await amounts()).reduce((sum,row)=>sum+row[2],0),monthActual);
+  await page.click('#dayTab');await settled();assert.equal((await amounts()).reduce((sum,row)=>sum+row[2],0),dayActual);
   const legacy=await context.newPage();
   await legacy.route('**/data/*.json',async route=>{if(route.request().url().includes('domains-'))return route.continue();const response=await route.fetch();const data=await response.json();delete data.hourly;delete data.hourly_started_at;await route.fulfill({response,json:data});});
   await legacy.goto(url);await legacy.waitForFunction(()=>!document.getElementById('statistics').hasAttribute('aria-busy'));
   assert.ok(await legacy.locator('#hourlyEmpty').isVisible());assert.ok((await legacy.locator('#hourlyCoverage').textContent()).includes('尚未启用'));await legacy.close();
   // Verify zero, byte-sized and large hourly totals using isolated synthetic responses.
   for(const [peak,unit] of [[0,'B'],[1,'B'],[18*1024**2,'MiB'],[5*1024**3,'GiB']]){
-   const fixture=await context.newPage();
+   const fixture=await context.newPage();let dropHours=false;
    await fixture.route('**/data/*.json',async route=>{
     if(route.request().url().includes('domains-'))return route.continue();
     const response=await route.fetch(),data=await response.json();
-    if(data.hourly)data.hourly[monthId]={'12':{other:{upload:0,download:peak}}};
+    if(data.hourly)data.hourly[monthId]=dropHours?{}:{'12':{other:{upload:0,download:peak}}};
     await route.fulfill({response,json:data});
    });
    await fixture.goto(url);await fixture.waitForFunction(()=>!document.getElementById('statistics').hasAttribute('aria-busy'));
+   await fixture.locator('.hour-button[data-hour="12"]').click();
+   const rowTotal=await fixture.locator('#categoryRows tr').evaluateAll(rows=>rows.reduce((sum,row)=>sum+Number(row.cells[3].title.replace(/[^0-9]/g,'')),0));assert.equal(rowTotal,peak);
+   const shares=await fixture.locator('.category-share').allTextContents();assert.ok(shares.every(t=>!t.includes('NaN')));
    const geometry=await verifyAxis(fixture);assert.equal(geometry.unit,`流量（${unit}）`);
    assert.equal(geometry.bars.length,1);assert.equal(geometry.bars[0].total,peak);
    assert.equal(await fixture.locator('.hour-button:disabled').count(),23,'missing hours must remain unknown');
    if(peak===18*1024**2)assert.deepEqual(geometry.ticks.map(t=>t.bytes/1024**2),[0,5,10,15,20]);
+   if(peak===0){dropHours=true;await fixture.click('#refreshButton');await fixture.waitForFunction(()=>!document.getElementById('statistics').hasAttribute('aria-busy'));assert.ok(await fixture.locator('#hourlyEmpty').isVisible());assert.ok(await fixture.locator('#restoreDayButton').isHidden());assert.equal(await fixture.locator('#categoryScope').getAttribute('data-scope'),'day');}
    await fixture.close();
   }
-  console.log(JSON.stringify({hourlyAxis:true,scaleGeometry:true,zeroAndLargeValues:true,fixedMobileAxis:true,hourlyExactTotals:true,hourClick:true,categoryAutoFilter:true,historicalDay:true,legacyCoverage:true,dayBytes:dayActual,monthBytes:monthActual,categories:index.categories.length,csvRows:lines.length,emptyPeriod:true,trendNavigation:true,desktop:true,mobile:true,errors}));
+  console.log(JSON.stringify({hourlyBreakdown:true,restoreDaily:true,exactCategoryShares:true,hourlyCSV:true,refreshKeepsHour:true,domainScopeProtection:true,hourlyAxis:true,scaleGeometry:true,zeroAndLargeValues:true,fixedMobileAxis:true,hourlyExactTotals:true,hourClick:true,categoryAutoFilter:true,historicalDay:true,legacyCoverage:true,dayBytes:dayActual,monthBytes:monthActual,categories:index.categories.length,csvRows:lines.length,emptyPeriod:true,trendNavigation:true,desktop:true,mobile:true,errors}));
+  assert.deepEqual(errors,[]);
   await context.close();
  }finally{
   if(browser)await browser.close();

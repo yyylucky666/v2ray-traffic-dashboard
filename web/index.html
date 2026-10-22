@@ -55,11 +55,11 @@
         <div class="legend"><span><i class="upload-swatch"></i>上传</span><span><i class="download-swatch"></i>下载</span><span class="muted">灰色表示尚无小时记录；可横向滑动查看全天</span></div>
       </section>
 
-      <section class="panel">
-        <div class="panel-head"><div><h2>各类服务</h2><p class="muted">按总流量排序</p></div><button id="exportButton" type="button" class="button quiet" disabled>导出 CSV</button></div>
+      <section id="categoryPanel" class="panel">
+        <div class="panel-head"><div><h2>各类服务</h2><p id="categoryScope" class="muted" role="status" tabindex="-1">全天流量 · 按总流量排序</p></div><div class="category-actions"><button id="restoreDayButton" type="button" class="button" hidden>恢复全天流量</button><button id="exportButton" type="button" class="button quiet" disabled>导出 CSV</button></div></div>
         <div id="empty" class="empty" hidden><strong>这个周期还没有统计记录</strong><p id="emptyDetail">换一个日期，或等下一次采样后刷新。</p></div>
         <div class="table-wrap"><table id="categoryTable"><thead><tr><th scope="col">服务分类</th><th scope="col">上传</th><th scope="col">下载</th><th scope="col">总流量</th></tr></thead><tbody id="categoryRows"></tbody></table></div>
-        <div class="legend"><span><i class="upload-swatch"></i>上传</span><span><i class="download-swatch"></i>下载</span><span class="muted">条形长度表示各类总流量的相对大小</span></div>
+        <div class="legend"><span><i class="upload-swatch"></i>上传</span><span><i class="download-swatch"></i>下载</span><span id="categoryLegendNote" class="muted">条形长度表示各类总流量的相对大小</span></div>
       </section>
 
       <section id="domainPanel" class="panel domain-panel" hidden>
